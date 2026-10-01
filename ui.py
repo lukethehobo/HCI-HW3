@@ -38,7 +38,21 @@ def api_post(path, data):
 # The request method should use the string f"{API_URL}{path}/{id}" to access the correct path,
 # where id refers to the id number of the question to be deleted. 
 def api_delete(path, id):
-    pass
+        try:
+            # Attempt to send GET request to API
+            response = requests.delete(f"{API_URL}{path}/{id}", timeout=5)
+            # If we get an error code back, raise an exception
+            response.raise_for_status()
+            # Otherwise, GET was successful so return response data
+            return True
+            response.raise_for_status()
+            # Otherwise, POST was successful so return True
+            return True
+        except requests.RequestException as e:
+            # POST request was unsuccessful
+            # Send an alert with error details to the UI and return False
+            ui.notify(f"Could not reach API: {e}", type="negative")
+            return False
 
 # TODO: Create api_put function that attempts to send a PUT request to the API.
 # The request method should use the string f"{API_URL}{path}/{id}" to access the correct path,
@@ -46,14 +60,43 @@ def api_delete(path, id):
 # to this function must be sent with the request so that the API knows the updated values to add 
 # to the dataset (similar to how data is sent in api_post).
 def api_put(path, id, data):
-    pass
+    try:
+            # Attempt to send POST request to API with data payload
+            response = requests.put(f"{API_URL}{path}/{id}", json=data, timeout=5)
+            # If we get an error code back, raise an exception
+            response.raise_for_status()
+            # Otherwise, POST was successful so return True
+            return True
+    except requests.RequestException as e:
+            # POST request was unsuccessful
+            # Send an alert with error details to the UI and return False
+            ui.notify(f"Could not reach API: {e}", type="negative")
+            return False
 
 # TODO: Add edit and delete buttons dynamically to each question card. 
 def render_question(question):
-    with ui.card() as card:
+    with ui.card().classes('w-[200px] h-[200px]') as card:
+
+        with ui.dialog() as dialog, ui.card():
+                ui.label("Question: \n" + question["q"])
+                new_q = ui.input(label="").props("clearable")
+        
+                ui.label("Answer: \n" + question["a"])
+                new_a = ui.input(label="").props("clearable")
+
+                ui.button('Update question', on_click=lambda: [
+                    dialog.close(),
+                    api_put("/update", question["id"], {
+                        "question": new_q.value,
+                        "answer": new_a.value}),
+                    render_page()])
+
+
         card.on("click", lambda: toggle_answer(question["id"]))
         ui.label(question["q"])
         ui.label(question["a"]).classes("text-s text-green font-bold").bind_visibility_from(question["state"], "show_answer")
+        ui.button(text="Delete", color="#145F07", on_click=lambda: delete(question["id"]))
+        ui.button(text="Edit", color = "#145F07", on_click=lambda: dialog.open())
 
 def toggle_answer(i):
     questions[i]["state"]["show_answer"] = not questions[i]["state"]["show_answer"]
@@ -62,13 +105,19 @@ def add_new_question(question, answer):
     api_post("/add", {"question": question, "answer": answer})
     render_page()
 
+
+def delete(id):
+    api_delete("/delete", id)
+    render_page()
+
 def render_text_inputs():
-    new_question_input = ui.input(label="New question").props("clearable")
-    new_answer_input = ui.input(label="New answer").props("clearable")
-    add_question_btn = ui.button(text="Add question", on_click=lambda: add_new_question(
-        question=new_question_input.value,
-        answer=new_answer_input.value
-    ))
+    with ui.card().classes('bg-gray-500'):
+        new_question_input = ui.input(label="New question").props("clearable")
+        new_answer_input = ui.input(label="New answer").props("clearable")
+        add_question_btn = ui.button(text="Add question", on_click=lambda: add_new_question(
+            question=new_question_input.value,
+            answer=new_answer_input.value
+        ))
 
 def init_page():
     render_page()
@@ -78,9 +127,11 @@ def render_page():
     questions = api_get("/questions")
     page_body.clear()
     with page_body:
-        for question in questions:
-            question["state"] = {"show_answer": False}
-            render_question(question)
+        with ui.row().classes('border-2 p-4 rounded-lg shadow-md'):
+            for question in questions:
+                question["state"] = {"show_answer": False}
+                render_question(question)
+        ui.element('div').classes('h-20')
         render_text_inputs()
     
 
